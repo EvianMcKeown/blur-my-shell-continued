@@ -1,21 +1,19 @@
 import GObject from 'gi://GObject';
 
 import * as utils from '../conveniences/utils.js';
-
 const Shell = await utils.import_in_shell_only('gi://Shell');
 const Clutter = await utils.import_in_shell_only('gi://Clutter');
 
 const SHADER_FILENAME = 'color.glsl';
 const DEFAULT_PARAMS = {
-    color: [0.0, 0.0, 0.0, 0.0],
-    blend_mode: 0
+    color: [0.0, 0.0, 0.0]
 };
 
 
-export const ColorEffect = utils.IS_IN_PREFERENCES ?
+export const MixEffect = utils.IS_IN_PREFERENCES ?
     { default_params: DEFAULT_PARAMS } :
     new GObject.registerClass({
-        GTypeName: "ColorEffect",
+        GTypeName: "MixEffect",
         Properties: {
             'red': GObject.ParamSpec.double(
                 `red`,
@@ -41,10 +39,10 @@ export const ColorEffect = utils.IS_IN_PREFERENCES ?
                 0.0, 1.0,
                 0.0,
             ),
-            'blend': GObject.ParamSpec.double(
-                `blend`,
-                `Blend`,
-                `Amount of blending between the colors`,
+            'opacity': GObject.ParamSpec.double(
+                `opacity`,
+                `Opacity`,
+                `Opacity`,
                 GObject.ParamFlags.READWRITE,
                 0.0, 1.0,
                 0.0,
@@ -56,31 +54,26 @@ export const ColorEffect = utils.IS_IN_PREFERENCES ?
                 GObject.ParamFlags.READWRITE,
                 0, 17,
                 0,
-            )
+            ),
         }
-        // Normal (0), Multiply (1), Screen (2), Overlay (3), Darken (4), Lighten (5), Plus darker (6), Plus lighter (7), Color dodge (8),
-        // Color burn (9), Hard light (10), Soft light (11), Difference (12), Exclusion (13), Hue (14), Saturation (15), Color (16),
-        // Luminosity (17)
-    }, class ColorEffect extends Clutter.ShaderEffect {
+        // Normal (0), Multiply (1), Screen (2), Overlay (3), Darken (4), Lighten (5), Color dodge (6), Color burn (7), Hard light (8),
+        // Soft light (9), Difference (10), Exclusion (11), Hue (12), Saturation (13), Color (14), Luminosity (15), Plus darker (16),
+        // Plus lighter (17)
+    }, class MixEffect extends Clutter.ShaderEffect {
         constructor(params) {
-            // initialize without color as a parameter
-            const { color, ...parent_params } = params;
-            super(parent_params);
+            super(params);
 
             this._red = null;
             this._green = null;
             this._blue = null;
-            this._blend = null;
-            this._blend_mode = null;
+            this._opacity = null;
 
             // set shader source
             this._source = utils.get_shader_source(Shell, SHADER_FILENAME, import.meta.url);
             if (this._source)
                 this.set_shader_source(this._source);
 
-            // set params; utils.setup_params doesn't work here with color
-            this.color = 'color' in params ? color : this.constructor.default_params.color;
-            this.blend_mode = 'blend_mode' in params ?  params.blend_mode : this.constructor.default_params.blend_mode;
+            utils.setup_params(this, params);
         }
 
         static get default_params() {
@@ -123,46 +116,32 @@ export const ColorEffect = utils.IS_IN_PREFERENCES ?
             }
         }
 
-        get blend() {
-            return this._blend;
+        get opacity() {
+            return this._opacity;
         }
 
-        set blend(value) {
-            if (this._blend !== value) {
-                this._blend = value;
+        set opacity(value) {
+            if (this._opacity !== value) {
+                this._opacity = value;
 
-                this.set_uniform_value('blend', parseFloat(this._blend - 1e-6));
-                this.set_enabled(this.blend > 0);
+                this.set_uniform_value('blend', parseFloat(this._opacity - 1e-6));
+                this.set_enabled(this.opacity > 0);
             }
         }
 
-        get blend_mode() {
-            return this._blend_mode;
-        }
-
-        set blend_mode(value) {
-            if (this._blend_mode !== value) {
-                this._blend_mode = value;
-
-                this.set_uniform_value('mode', this._blend_mode);
-            }
-        }
-
-        set color(rgba) {
-            let [r, g, b, a] = rgba;
+        set color(rgb) {
+            let [r, g, b] = rgb;
             this.red = r;
             this.green = g;
             this.blue = b;
-            this.blend = a;
         }
 
         get color() {
-            return [this.red, this.green, this.blue, this.blend];
+            return [this.red, this.green, this.blue];
         }
 
         /// False set function, only cares about the color. Too hard to change.
         set(params) {
             this.color = params.color;
-            this.blend_mode = params.blend_mode;
         }
     });
